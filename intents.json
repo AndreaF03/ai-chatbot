@@ -1,0 +1,19 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": ["Hi", "Hello", "Good morning"],
+      "responses": ["Hello! How can I help you today?"]
+    },
+    {
+      "tag": "goodbye",
+      "patterns": ["Bye", "See you", "Goodbye"],
+      "responses": ["Goodbye! Have a great day."]
+    },
+    {
+      "tag": "hours",
+      "patterns": ["What are your hours?", "When are you open?"],
+      "responses": ["We are open from 9 AM to 6 PM, Monday to Friday."]
+    }
+  ]
+}
