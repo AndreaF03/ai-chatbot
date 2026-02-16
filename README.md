@@ -1,21 +1,54 @@
 # AI-Driven Conversational Chatbot 🤖
 
-## Built With:
+A deep learning chatbot built using TensorFlow, LSTM, NLP and Flask.
+
+---
+
+## 🚀 Features
+
+- LSTM-based intent classification
+- NLP preprocessing
+- Admin dashboard with analytics
+- SQLite database
+- Conversation logging
+- Deployment-ready configuration
+
+---
+
+## 🧠 Technologies Used
+
 - Python
 - TensorFlow
-- NLTK
 - Flask
+- SQLite
 - HTML/CSS
+- JavaScript
 
-## Features
-- Intent Classification
-- Confidence Threshold
-- Real-Time Chat UI
-- NLP Preprocessing
-- Conversation Logging
+---
 
-## How to Run
+## 🛠 Installation
+
+1. Clone the repository
+
+git clone https://github.com/YOUR_USERNAME/ai-chatbot.git
+
+2. Install dependencies
 
 pip install -r requirements.txt
+
+3. Train the model
+
 python train.py
+
+4. Run the app
+
 python app.py
+
+---
+
+## 🌍 Future Improvements
+
+- Context-aware chatbot
+- Transformer-based model
+- Cloud deployment
+- Authentication system

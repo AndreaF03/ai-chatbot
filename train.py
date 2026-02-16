@@ -1,68 +1,52 @@
 import json
 import numpy as np
-import nltk
-from nltk.stem import WordNetLemmatizer
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.layers import Embedding, LSTM, Dense
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.preprocessing import LabelEncoder
 import pickle
-
-
-lemmatizer = WordNetLemmatizer()
-nltk.download('punkt')
-nltk.download('wordnet')
 
 with open('intents.json') as file:
     data = json.load(file)
 
-words = []
-classes = []
-documents = []
+sentences = []
+labels = []
 
 for intent in data['intents']:
     for pattern in intent['patterns']:
-        word_list = nltk.word_tokenize(pattern)
-        words.extend(word_list)
-        documents.append((word_list, intent['tag']))
-        if intent['tag'] not in classes:
-            classes.append(intent['tag'])
+        sentences.append(pattern)
+        labels.append(intent['tag'])
 
-words = [lemmatizer.lemmatize(w.lower()) for w in words]
-words = sorted(set(words))
-classes = sorted(set(classes))
+# Encode labels
+label_encoder = LabelEncoder()
+labels = label_encoder.fit_transform(labels)
 
-training = []
-output_empty = [0] * len(classes)
+# Tokenize sentences
+tokenizer = Tokenizer(num_words=2000)
+tokenizer.fit_on_texts(sentences)
+sequences = tokenizer.texts_to_sequences(sentences)
 
-for doc in documents:
-    bag = []
-    word_patterns = [lemmatizer.lemmatize(word.lower()) for word in doc[0]]
-    for w in words:
-        bag.append(1 if w in word_patterns else 0)
+max_len = 20
+padded_sequences = pad_sequences(sequences, truncating='post', maxlen=max_len)
 
-    output_row = list(output_empty)
-    output_row[classes.index(doc[1])] = 1
-    training.append([bag, output_row])
-
-training = np.array(training, dtype=object)
-
-train_x = list(training[:,0])
-train_y = list(training[:,1])
-
+# Build LSTM model
 model = Sequential()
-model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))
-model.add(Dropout(0.5))
+model.add(Embedding(2000, 128, input_length=max_len))
+model.add(LSTM(128))
 model.add(Dense(64, activation='relu'))
-model.add(Dense(len(train_y[0]), activation='softmax'))
+model.add(Dense(len(set(labels)), activation='softmax'))
 
-model.compile(loss='categorical_crossentropy',
+model.compile(loss='sparse_categorical_crossentropy',
               optimizer='adam',
               metrics=['accuracy'])
 
-model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5)
+model.fit(padded_sequences, labels, epochs=200)
 
+# Save everything
 model.save('model.h5')
+pickle.dump(tokenizer, open('tokenizer.pkl', 'wb'))
+pickle.dump(label_encoder, open('label_encoder.pkl', 'wb'))
 
-print("Model trained and saved!")
-pickle.dump(words, open('words.pkl', 'wb'))
-pickle.dump(classes, open('classes.pkl', 'wb'))
+print("LSTM Model trained successfully!")
