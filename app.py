@@ -11,6 +11,8 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from textblob import TextBlob
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 
 # ==============================
 # Initialize Flask App
@@ -127,6 +129,30 @@ def get_response(tag):
         if intent["tag"] == tag:
             return random.choice(intent["responses"])
     return "Sorry, I didn't understand that."
+def cluster_unknown_queries():
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("SELECT id, user_message FROM unknown_queries WHERE resolved=0")
+    data = c.fetchall()
+    conn.close()
+
+    if len(data) < 2:
+        return []
+
+    ids = [row[0] for row in data]
+    texts = [row[1] for row in data]
+
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(texts)
+
+    kmeans = KMeans(n_clusters=min(3, len(texts)), random_state=42)
+    kmeans.fit(X)
+
+    clusters = {}
+    for i, label in enumerate(kmeans.labels_):
+        clusters.setdefault(label, []).append((ids[i], texts[i]))
+
+    return clusters
 
 # ==============================
 # Routes
@@ -175,11 +201,14 @@ def admin():
     unresolved = c.fetchall()
 
     conn.close()
+    clusters = cluster_unknown_queries()
 
     return render_template("admin.html",
-                           total_messages=total_messages,
-                           recent_chats=recent_chats,
-                           unresolved=unresolved)
+                        total_messages=total_messages,
+                        recent_chats=recent_chats,
+                        unresolved=unresolved,
+                        clusters=clusters)
+
 
 @app.route("/resolve/<int:id>", methods=["POST"])
 @login_required
