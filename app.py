@@ -13,6 +13,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+import subprocess
 
 # ==============================
 # Initialize Flask App
@@ -66,6 +67,8 @@ def init_db():
     conn.close()
 
 init_db()
+def retrain_model():
+    subprocess.run(["python", "train.py"])
 
 # ==============================
 # Create Default Admin
@@ -178,6 +181,48 @@ def login():
             return redirect("/admin")
 
     return render_template("login.html")
+@app.route("/retrain", methods=["POST"])
+@login_required
+def retrain():
+    retrain_model()
+    return redirect("/admin")
+def integrate_new_knowledge():
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("SELECT assigned_tag, user_message, response FROM unknown_queries WHERE resolved=1")
+    data = c.fetchall()
+    conn.close()
+
+    if not data:
+        return
+
+    with open("intents.json", "r") as file:
+        intents_data = json.load(file)
+
+    for tag, question, response in data:
+        found = False
+        for intent in intents_data["intents"]:
+            if intent["tag"] == tag:
+                intent["patterns"].append(question)
+                intent["responses"].append(response)
+                found = True
+                break
+
+        if not found:
+            intents_data["intents"].append({
+                "tag": tag,
+                "patterns": [question],
+                "responses": [response]
+            })
+
+    with open("intents.json", "w") as file:
+        json.dump(intents_data, file, indent=4)
+@app.route("/retrain", methods=["POST"])
+@login_required
+def retrain():
+    integrate_new_knowledge()
+    retrain_model()
+    return redirect("/admin")
 
 @app.route("/logout")
 @login_required
