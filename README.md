@@ -61,3 +61,11 @@ python app.py
 - Automatic clustering of unresolved queries
 - Semi-autonomous knowledge suggestion engine
 
+## 🧠 Adaptive Learning System
+
+- Stores unknown queries
+- Allows admin resolution
+- Automatically integrates new knowledge into dataset
+- One-click model retraining
+- Self-improving conversational AI
+
