@@ -52,3 +52,12 @@ python app.py
 - Transformer-based model
 - Cloud deployment
 - Authentication system
+
+## 🚀 Novel Features
+
+- Emotion-aware adaptive response system
+- Confidence-based fallback mechanism
+- Self-learning unknown query storage
+- Automatic clustering of unresolved queries
+- Semi-autonomous knowledge suggestion engine
+
