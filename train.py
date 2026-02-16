@@ -5,6 +5,8 @@ from nltk.stem import WordNetLemmatizer
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
+import pickle
+
 
 lemmatizer = WordNetLemmatizer()
 nltk.download('punkt')
@@ -62,3 +64,5 @@ model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5)
 model.save('model.h5')
 
 print("Model trained and saved!")
+pickle.dump(words, open('words.pkl', 'wb'))
+pickle.dump(classes, open('classes.pkl', 'wb'))
