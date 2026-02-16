@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect
+from flask import Flask, render_template, request, jsonify, redirect, session
 import tensorflow as tf
 import numpy as np
 import json
@@ -10,35 +10,28 @@ from datetime import datetime
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
-
+from textblob import TextBlob
 
 # ==============================
-# Initialize Flask App FIRST
+# Initialize Flask App
 # ==============================
 app = Flask(__name__)
-app.secret_key = "supersecretkey"   # Required for login sessions
-
+app.secret_key = "supersecretkey"
 
 # ==============================
-# Initialize Login Manager
+# Login Manager Setup
 # ==============================
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-
-# ==============================
-# User Class
-# ==============================
 class User(UserMixin):
     def __init__(self, id):
         self.id = id
 
-
 @login_manager.user_loader
 def load_user(user_id):
     return User(user_id)
-
 
 # ==============================
 # Initialize Database
@@ -51,6 +44,8 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   user_message TEXT,
                   bot_response TEXT,
+                  emotion TEXT,
+                  confidence REAL,
                   timestamp TEXT)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS users
@@ -58,12 +53,17 @@ def init_db():
                   username TEXT UNIQUE,
                   password TEXT)''')
 
+    c.execute('''CREATE TABLE IF NOT EXISTS unknown_queries
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_message TEXT,
+                  timestamp TEXT,
+                  resolved INTEGER DEFAULT 0,
+                  admin_response TEXT)''')
+
     conn.commit()
     conn.close()
 
-
 init_db()
-
 
 # ==============================
 # Create Default Admin
@@ -72,20 +72,16 @@ def create_admin():
     conn = sqlite3.connect('chatbot.db')
     c = conn.cursor()
 
-    hashed_password = generate_password_hash("admin123")
-
-    try:
+    c.execute("SELECT * FROM users WHERE username=?", ("admin",))
+    if not c.fetchone():
+        hashed_password = generate_password_hash("admin123")
         c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
                   ("admin", hashed_password))
         conn.commit()
-    except:
-        pass
 
     conn.close()
 
-
 create_admin()
-
 
 # ==============================
 # Load AI Model
@@ -99,32 +95,38 @@ with open("intents.json") as file:
 
 max_len = 20
 
-
 # ==============================
-# Predict Intent
+# AI Prediction
 # ==============================
 def predict_class(sentence):
     sequence = tokenizer.texts_to_sequences([sentence])
     padded = pad_sequences(sequence, maxlen=max_len)
-    result = model.predict(padded)[0]
+    result = model.predict(padded, verbose=0)[0]
 
-    confidence = np.max(result)
-    if confidence < 0.6:
-        return None
+    confidence = float(np.max(result))
+    intent = label_encoder.inverse_transform([np.argmax(result)])[0]
 
-    return label_encoder.inverse_transform([np.argmax(result)])[0]
-
+    return intent, confidence
 
 # ==============================
-# Get Bot Response
+# Emotion Detection
+# ==============================
+def detect_emotion(text):
+    polarity = TextBlob(text).sentiment.polarity
+    if polarity > 0.3:
+        return "positive"
+    elif polarity < -0.3:
+        return "negative"
+    return "neutral"
+
+# ==============================
+# Get Intent Response
 # ==============================
 def get_response(tag):
-    if tag:
-        for intent in intents["intents"]:
-            if intent["tag"] == tag:
-                return random.choice(intent["responses"])
+    for intent in intents["intents"]:
+        if intent["tag"] == tag:
+            return random.choice(intent["responses"])
     return "Sorry, I didn't understand that."
-
 
 # ==============================
 # Routes
@@ -132,7 +134,6 @@ def get_response(tag):
 @app.route("/")
 def home():
     return render_template("index.html")
-
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -152,6 +153,11 @@ def login():
 
     return render_template("login.html")
 
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect("/")
 
 @app.route("/admin")
 @login_required
@@ -165,36 +171,78 @@ def admin():
     c.execute("SELECT * FROM chats ORDER BY id DESC LIMIT 10")
     recent_chats = c.fetchall()
 
+    c.execute("SELECT * FROM unknown_queries WHERE resolved=0")
+    unresolved = c.fetchall()
+
     conn.close()
 
     return render_template("admin.html",
                            total_messages=total_messages,
-                           recent_chats=recent_chats)
+                           recent_chats=recent_chats,
+                           unresolved=unresolved)
 
-
-@app.route("/logout")
+@app.route("/resolve/<int:id>", methods=["POST"])
 @login_required
-def logout():
-    logout_user()
-    return redirect("/")
+def resolve_query(id):
+    new_response = request.form["response"]
 
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("UPDATE unknown_queries SET resolved=1, admin_response=? WHERE id=?",
+              (new_response, id))
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
 
 @app.route("/get", methods=["POST"])
 def chatbot_response():
     msg = request.json["message"]
 
-    tag = predict_class(msg)
-    response = get_response(tag)
-
+    # 1️⃣ Check if admin resolved it
     conn = sqlite3.connect('chatbot.db')
     c = conn.cursor()
-    c.execute("INSERT INTO chats (user_message, bot_response, timestamp) VALUES (?, ?, ?)",
-              (msg, response, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    c.execute("SELECT admin_response FROM unknown_queries WHERE user_message=? AND resolved=1", (msg,))
+    custom = c.fetchone()
+    conn.close()
+
+    if custom:
+        return jsonify({"response": custom[0]})
+
+    # 2️⃣ Emotion
+    emotion = detect_emotion(msg)
+
+    # 3️⃣ Intent Prediction
+    intent, confidence = predict_class(msg)
+
+    # 4️⃣ Low confidence handling
+    if confidence < 0.6:
+        response = "I'm still learning. An admin will review this question."
+
+        conn = sqlite3.connect('chatbot.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO unknown_queries (user_message, timestamp) VALUES (?, ?)",
+                  (msg, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+        conn.close()
+    else:
+        response = get_response(intent)
+
+    # 5️⃣ Emotion-based tone
+    if emotion == "negative":
+        response = "I'm sorry you're feeling that way. " + response
+    elif emotion == "positive":
+        response = "That's great! " + response
+
+    # 6️⃣ Save chat log
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO chats (user_message, bot_response, emotion, confidence, timestamp) VALUES (?, ?, ?, ?, ?)",
+              (msg, response, emotion, confidence, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
     return jsonify({"response": response})
-
 
 # ==============================
 # Run Server
