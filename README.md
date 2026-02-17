@@ -83,3 +83,11 @@ python app.py
 - Admin override engine
 - Engine usage analytics dashboard
 - Intelligent orchestration layer
+
+## Continuous Learning & Feedback System
+
+- Real-time user feedback collection
+- Intent-wise satisfaction tracking
+- AI performance scoring
+- Weak-intent detection
+- Continuous improvement monitoring

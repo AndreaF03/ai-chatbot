@@ -15,7 +15,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 import subprocess
 import shutil
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "chatbot.db")
+MODEL_PATH = os.path.join(BASE_DIR, "model", "model.h5")
+TOKENIZER_PATH = os.path.join(BASE_DIR, "model", "tokenizer.pkl")
+ENCODER_PATH = os.path.join(BASE_DIR, "model", "label_encoder.pkl")
+INTENTS_PATH = os.path.join(BASE_DIR, "intents.json")
 # ==============================
 # Initialize Flask App
 # ==============================
@@ -40,7 +45,7 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id FROM users WHERE id=?", (user_id,))
     user = c.fetchone()
@@ -53,7 +58,7 @@ def load_user(user_id):
 # Database Initialization
 # ==============================
 def init_db():
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS chats
@@ -107,7 +112,7 @@ init_db()
 # Create Default Admin
 # ==============================
 def create_admin():
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE username=?", ("admin",))
     if not c.fetchone():
@@ -122,11 +127,13 @@ create_admin()
 # ==============================
 # Load AI Model
 # ==============================
-model = tf.keras.models.load_model("model/model.keras")
-tokenizer = pickle.load(open("model/tokenizer.pkl", "rb"))
-label_encoder = pickle.load(open("model/label_encoder.pkl", "rb"))
+model = tf.keras.models.load_model("model/model.h5")
 
-with open("intents.json") as file:
+tokenizer = pickle.load(open(TOKENIZER_PATH, "rb"))
+label_encoder = pickle.load(open(ENCODER_PATH, "rb"))
+
+
+with open(INTENTS_PATH) as file:
     intents = json.load(file)
 
 max_len = 20
@@ -177,7 +184,7 @@ def get_response(tag):
 # Clustering Unknown Queries
 # ==============================
 def cluster_unknown_queries():
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, user_message FROM unknown_queries WHERE resolved=0")
     data = c.fetchall()
@@ -205,7 +212,7 @@ def cluster_unknown_queries():
 # Integrate New Knowledge
 # ==============================
 def integrate_new_knowledge():
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT user_message, admin_response FROM unknown_queries WHERE resolved=1")
     data = c.fetchall()
@@ -255,13 +262,13 @@ def retrain_model():
     else:
         accuracy = 0.0
 
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM model_versions")
     count = c.fetchone()[0]
     version = f"model_v{count+1}.keras"
 
-    shutil.copy("model/model.keras", f"model_versions/{version}")
+    shutil.copy(MODEL_PATH, f"model_versions/{version}")
 
     c.execute("INSERT INTO model_versions (version, accuracy, timestamp) VALUES (?, ?, ?)",
               (version, accuracy, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -282,7 +289,7 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        conn = sqlite3.connect('chatbot.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username=?", (username,))
         user = c.fetchone()
@@ -310,7 +317,7 @@ def retrain():
 @app.route("/admin")
 @login_required
 def admin():
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM chats")
@@ -354,7 +361,7 @@ def admin():
 def resolve_query(id):
     new_response = request.form["response"]
 
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("UPDATE unknown_queries SET resolved=1, admin_response=? WHERE id=?",
               (new_response, id))
@@ -370,7 +377,7 @@ def chatbot_response():
     msg = request.json["message"].strip()
     normalized_msg = msg.lower()
 
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     # Check resolved custom answer first
@@ -431,7 +438,7 @@ def chatbot_response():
 def feedback():
     data = request.json
 
-    conn = sqlite3.connect('chatbot.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("INSERT INTO feedback (user_message, predicted_intent, confidence, rating, timestamp) VALUES (?, ?, ?, ?, ?)",

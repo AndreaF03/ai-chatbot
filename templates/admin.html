@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Chatbot Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            padding: 30px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-size: 14px;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn-green {
+            background: #28a745;
+            color: white;
+        }
+        .btn-red {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-blue {
+            background: #007bff;
+            color: white;
+        }
+        details {
+            cursor: pointer;
+        }
+        pre {
+            font-size: 12px;
+            background: #f8f9fa;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <h2>🤖 AI Chatbot Admin Dashboard</h2>
+
+    <p><strong>Total Messages:</strong> {{ total_messages }}</p>
+
+    <form method="POST" action="/retrain">
+        <button class="btn-green">🔄 Retrain Model</button>
+    </form>
+
+    <br>
+
+    <!-- ================== Recent Chats ================== -->
+    <h3>Recent Chats (Explainable AI Enabled)</h3>
+
+    <table>
+        <tr>
+            <th>User Message</th>
+            <th>Bot Response</th>
+            <th>Emotion</th>
+            <th>Confidence</th>
+            <th>Explanation</th>
+            <th>Timestamp</th>
+        </tr>
+
+        {% for chat in recent_chats %}
+        <tr>
+            <td>{{ chat[1] }}</td>
+            <td>{{ chat[2] }}</td>
+            <td>{{ chat[3] }}</td>
+            <td>{{ "%.2f"|format(chat[4]) }}</td>
+            <td>
+                <details>
+                    <summary>View Probabilities</summary>
+                    <pre>{{ chat[5] }}</pre>
+                </details>
+            </td>
+            <td>{{ chat[6] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <br><br>
+
+    <!-- ================== Unresolved Queries ================== -->
+    <h3>Unresolved Queries</h3>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>User Question</th>
+            <th>Timestamp</th>
+            <th>Action</th>
+        </tr>
+
+        {% for item in unresolved %}
+        <tr>
+            <td>{{ item[0] }}</td>
+            <td>{{ item[1] }}</td>
+            <td>{{ item[2] }}</td>
+            <td>
+                <form method="POST" action="/resolve/{{ item[0] }}">
+                    <input type="text" name="response" placeholder="Admin response" required>
+                    <button class="btn-blue">Resolve</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <br><br>
+
+    <!-- ================== Auto Clusters ================== -->
+    <h3>AI-Generated Clusters (Unknown Query Grouping)</h3>
+
+    {% if clusters %}
+        {% for label, items in clusters.items() %}
+            <h4>Cluster {{ label }}</h4>
+            <ul>
+                {% for item in items %}
+                    <li>{{ item[1] }}</li>
+                {% endfor %}
+            </ul>
+        {% endfor %}
+    {% else %}
+        <p>No clusters available yet.</p>
+    {% endif %}
+
+    <br><br>
+
+    <!-- ================== Model Version History ================== -->
+    <h3>Model Version History</h3>
+
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>Accuracy</th>
+            <th>Timestamp</th>
+        </tr>
+
+        {% for model in model_history %}
+        <tr>
+            <td>{{ model[1] }}</td>
+            <td>{{ "%.4f"|format(model[2]) }}</td>
+            <td>{{ model[3] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <br>
+
+    <a href="/logout">
+        <button class="btn-red">Logout</button>
+    </a>
+<h3>Hybrid Engine Usage</h3>
+<table>
+<tr>
+<th>Engine</th>
+<th>Usage Count</th>
+</tr>
+{% for e in engine_stats %}
+<tr>
+<td>{{ e[0] }}</td>
+<td>{{ e[1] }}</td>
+</tr>
+{% endfor %}
+</table>
+<h3>AI Satisfaction Score</h3>
+<p>Overall Average Score: {{ avg_score }}</p>
+
+<h4>Intent Performance</h4>
+<table>
+<tr>
+<th>Intent</th>
+<th>Average Rating</th>
+</tr>
+
+{% for item in intent_scores %}
+<tr>
+<td>{{ item[0] }}</td>
+<td>{{ item[1] }}</td>
+</tr>
+{% endfor %}
+</table>
+
+</div>
+
+</body>
+</html>

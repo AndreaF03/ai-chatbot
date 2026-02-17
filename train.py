@@ -6,11 +6,15 @@ from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import pickle
 import os
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import datetime
+
 print("🚀 Starting Training Process...")
+
+# Create model folder
+os.makedirs("model", exist_ok=True)
 
 # ===============================
 # Load Dataset
@@ -26,7 +30,7 @@ for intent in data['intents']:
         sentences.append(pattern)
         labels.append(intent['tag'])
 
-print(f" Total training samples: {len(sentences)}")
+print(f"Total training samples: {len(sentences)}")
 
 # ===============================
 # Encode Labels
@@ -51,7 +55,7 @@ padded_sequences = pad_sequences(sequences, truncating='post', maxlen=max_len)
 # ===============================
 model = Sequential()
 model.add(Embedding(vocab_size, 128, input_length=max_len))
-model.add(LSTM(128, return_sequences=False))
+model.add(LSTM(128))
 model.add(Dropout(0.5))
 model.add(Dense(64, activation='relu'))
 model.add(Dense(len(set(labels_encoded)), activation='softmax'))
@@ -62,14 +66,13 @@ model.compile(
     metrics=['accuracy']
 )
 
-print(" Training Model...")
 early_stop = EarlyStopping(
     monitor='val_loss',
     patience=10,
     restore_best_weights=True
 )
 
-checkpoint_path = os.path.join("model", "best_model.keras")
+checkpoint_path = os.path.join("model", "best_model.h5")
 
 checkpoint = ModelCheckpoint(
     checkpoint_path,
@@ -78,7 +81,7 @@ checkpoint = ModelCheckpoint(
     verbose=1
 )
 
-print(" Training Model with Validation...")
+print("Training Model...")
 history = model.fit(
     padded_sequences,
     labels_encoded,
@@ -88,6 +91,9 @@ history = model.fit(
     verbose=1
 )
 
+# ===============================
+# Save Metadata
+# ===============================
 final_accuracy = float(max(history.history['accuracy']))
 val_accuracy = float(max(history.history['val_accuracy']))
 
@@ -105,37 +111,35 @@ metadata_path = os.path.join("model", "training_metadata.json")
 with open(metadata_path, "w") as f:
     json.dump(metadata, f, indent=4)
 
-print(" Training metadata saved at:", metadata_path)
+print("Training metadata saved at:", metadata_path)
 
 # ===============================
-# Create Model Folder
+# Save Model (.h5 format)
 # ===============================
-os.makedirs("model", exist_ok=True)
-
-# ===============================
-# Save Model (Modern Format)
-# ===============================
-model_path = os.path.join("model", "model.keras")
 version_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-versioned_model_path = os.path.join("model", f"model_{version_time}.keras")
+
+model_path = os.path.join("model", "model.h5")
+versioned_model_path = os.path.join("model", f"model_{version_time}.h5")
 
 model.save(versioned_model_path)
-
-# Also update current production model
 model.save(model_path)
 
-print(" Versioned model saved at:", versioned_model_path)
+print("Versioned model saved at:", versioned_model_path)
+print("Production model saved at:", model_path)
 
-
+# ===============================
 # Save Tokenizer
+# ===============================
 tokenizer_path = os.path.join("model", "tokenizer.pkl")
 pickle.dump(tokenizer, open(tokenizer_path, 'wb'))
 
+# ===============================
 # Save Label Encoder
+# ===============================
 encoder_path = os.path.join("model", "label_encoder.pkl")
 pickle.dump(label_encoder, open(encoder_path, 'wb'))
 
-print("Training Complete!")
-print(" Model saved at:", model_path)
-print(" Tokenizer saved at:", tokenizer_path)
-print(" Label encoder saved at:", encoder_path)
+print("Tokenizer saved at:", tokenizer_path)
+print("Label encoder saved at:", encoder_path)
+
+print("🎉 Training Complete!")

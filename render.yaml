@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: ai-chatbot
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
-    plan: free
-    pythonVersion: 3.10.13
