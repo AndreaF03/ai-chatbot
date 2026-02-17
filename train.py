@@ -8,7 +8,8 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.preprocessing import LabelEncoder
 import pickle
 import os
-
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+import datetime
 print("🚀 Starting Training Process...")
 
 # ===============================
@@ -62,7 +63,49 @@ model.compile(
 )
 
 print(" Training Model...")
-model.fit(padded_sequences, labels_encoded, epochs=200, verbose=1)
+early_stop = EarlyStopping(
+    monitor='val_loss',
+    patience=10,
+    restore_best_weights=True
+)
+
+checkpoint_path = os.path.join("model", "best_model.keras")
+
+checkpoint = ModelCheckpoint(
+    checkpoint_path,
+    monitor='val_accuracy',
+    save_best_only=True,
+    verbose=1
+)
+
+print(" Training Model with Validation...")
+history = model.fit(
+    padded_sequences,
+    labels_encoded,
+    epochs=200,
+    validation_split=0.2,
+    callbacks=[early_stop, checkpoint],
+    verbose=1
+)
+
+final_accuracy = float(max(history.history['accuracy']))
+val_accuracy = float(max(history.history['val_accuracy']))
+
+metadata = {
+    "timestamp": str(datetime.datetime.now()),
+    "samples": len(sentences),
+    "vocab_size": vocab_size,
+    "max_len": max_len,
+    "train_accuracy": final_accuracy,
+    "validation_accuracy": val_accuracy
+}
+
+metadata_path = os.path.join("model", "training_metadata.json")
+
+with open(metadata_path, "w") as f:
+    json.dump(metadata, f, indent=4)
+
+print(" Training metadata saved at:", metadata_path)
 
 # ===============================
 # Create Model Folder
@@ -73,7 +116,16 @@ os.makedirs("model", exist_ok=True)
 # Save Model (Modern Format)
 # ===============================
 model_path = os.path.join("model", "model.keras")
+version_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+versioned_model_path = os.path.join("model", f"model_{version_time}.keras")
+
+model.save(versioned_model_path)
+
+# Also update current production model
 model.save(model_path)
+
+print(" Versioned model saved at:", versioned_model_path)
+
 
 # Save Tokenizer
 tokenizer_path = os.path.join("model", "tokenizer.pkl")
