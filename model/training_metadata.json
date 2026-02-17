@@ -1,0 +1,8 @@
+{
+    "timestamp": "2026-02-17 15:26:53.270363",
+    "samples": 35,
+    "vocab_size": 3000,
+    "max_len": 20,
+    "train_accuracy": 0.8928571343421936,
+    "validation_accuracy": 1.0
+}
