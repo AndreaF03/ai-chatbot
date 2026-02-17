@@ -89,6 +89,13 @@ def init_db():
               user_message TEXT,
               engine_used TEXT,
               timestamp TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS feedback
+             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_message TEXT,
+              predicted_intent TEXT,
+              confidence REAL,
+              rating INTEGER,
+              timestamp TEXT)''')
 
 
     conn.commit()
@@ -320,6 +327,13 @@ def admin():
 
     c.execute("SELECT engine_used, COUNT(*) FROM chats GROUP BY engine_used")
     engine_stats = c.fetchall()
+    
+    c.execute("SELECT AVG(rating) FROM feedback")
+    avg_score = c.fetchone()[0]
+
+    c.execute("SELECT predicted_intent, AVG(rating) FROM feedback GROUP BY predicted_intent")
+    intent_scores = c.fetchall()
+
 
     conn.close()
 
@@ -331,7 +345,9 @@ def admin():
                            unresolved=unresolved,
                            clusters=clusters,
                            model_history=model_history,
-                           engine_stats=engine_stats)
+                           engine_stats=engine_stats,
+                           avg_score=avg_score,
+                           intent_scores=intent_scores)
 
 @app.route("/resolve/<int:id>", methods=["POST"])
 @login_required
@@ -406,7 +422,30 @@ def chatbot_response():
     conn.commit()
     conn.close()
 
-    return jsonify({"response": response})
+    return jsonify({
+    "response": response,
+    "intent": intent,
+    "confidence": confidence
+})
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    data = request.json
+
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+
+    c.execute("INSERT INTO feedback (user_message, predicted_intent, confidence, rating, timestamp) VALUES (?, ?, ?, ?, ?)",
+              (data["message"],
+               data["intent"],
+               data["confidence"],
+               data["rating"],
+               datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
+
 
 
 # ==============================

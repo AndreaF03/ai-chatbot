@@ -31,6 +31,15 @@ button {
     color: white;
     border: none;
 }
+button {
+    padding: 6px 10px;
+    margin-right: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+button:hover {
+    opacity: 0.8;
+}
 </style>
 </head>
 <body>
@@ -43,9 +52,17 @@ button {
 </div>
 
 <script>
+let lastMessage = "";
+let lastIntent = "";
+let lastConfidence = 0;
+
 function sendMessage(){
     let message = document.getElementById("userInput").value;
     let chatBox = document.getElementById("chat");
+
+    if(message.trim() === "") return;
+
+    lastMessage = message;
 
     chatBox.innerHTML += "<p><b>You:</b> " + message + "</p>";
 
@@ -56,13 +73,49 @@ function sendMessage(){
     })
     .then(response => response.json())
     .then(data => {
-        chatBox.innerHTML += "<p><b>Bot:</b> " + data.response + "</p>";
+
+        lastIntent = data.intent;
+        lastConfidence = data.confidence;
+
+        // Unique ID for this response block
+        let feedbackId = "feedback_" + Date.now();
+
+        chatBox.innerHTML += `
+            <p><b>Bot:</b> ${data.response}</p>
+            <div id="${feedbackId}">
+                <button onclick="sendFeedback(1, '${feedbackId}')">👍 Helpful</button>
+                <button onclick="sendFeedback(0, '${feedbackId}')">👎 Not Helpful</button>
+            </div>
+        `;
+
         chatBox.scrollTop = chatBox.scrollHeight;
     });
 
     document.getElementById("userInput").value = "";
 }
+
+function sendFeedback(rating, feedbackId){
+
+    fetch("/feedback", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            message: lastMessage,
+            intent: lastIntent,
+            confidence: lastConfidence,
+            rating: rating
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Disable buttons after clicking
+        document.getElementById(feedbackId).innerHTML =
+            rating === 1 ? "<p>Thank you for your feedback!</p>"
+                         : "<p>Feedback noted. We'll improve!</p>";
+    });
+}
 </script>
+
 
 </body>
 </html>
