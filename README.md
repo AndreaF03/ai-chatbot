@@ -75,3 +75,11 @@ python app.py
 - Shows top predicted intents in admin dashboard
 - Enables transparency and debugging
 - Tracks model confidence evolution over time
+
+##  Hybrid Multi-Engine Architecture
+
+- Local LSTM-based intent classifier
+- Confidence-based fallback LLM system
+- Admin override engine
+- Engine usage analytics dashboard
+- Intelligent orchestration layer
