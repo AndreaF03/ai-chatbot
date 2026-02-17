@@ -1,19 +1,94 @@
 {
-  "intents": [
-    {
-      "tag": "greeting",
-      "patterns": ["Hi", "Hello", "Good morning"],
-      "responses": ["Hello! How can I help you today?"]
-    },
-    {
-      "tag": "goodbye",
-      "patterns": ["Bye", "See you", "Goodbye"],
-      "responses": ["Goodbye! Have a great day."]
-    },
-    {
-      "tag": "hours",
-      "patterns": ["What are your hours?", "When are you open?"],
-      "responses": ["We are open from 9 AM to 6 PM, Monday to Friday."]
-    }
-  ]
+    "intents": [
+        {
+            "tag": "greeting",
+            "patterns": [
+                "Hi",
+                "Hello",
+                "Good morning"
+            ],
+            "responses": [
+                "Hello! How can I help you today?"
+            ]
+        },
+        {
+            "tag": "goodbye",
+            "patterns": [
+                "bye",
+                "goodbye",
+                "see you",
+                "talk to you later",
+                "i have to go",
+                "catch you later"
+            ],
+            "responses": [
+                "Goodbye! Have a great day."
+            ]
+        },
+        {
+            "tag": "hours",
+            "patterns": [
+                "What are your hours?",
+                "When are you open?"
+            ],
+            "responses": [
+                "We are open from 9 AM to 6 PM, Monday to Friday."
+            ]
+        },
+        {
+            "tag": "weekend_hours",
+            "patterns": [
+                "And on weekends?",
+                "Are you open on weekends?",
+                "Weekend timing?",
+                "Do you work on Saturday?",
+                "Sunday hours?",
+                "What about weekends?",
+                "Are you open Saturday?",
+                "Are you open Sunday?"
+            ],
+            "responses": [
+                "We are closed on weekends."
+            ]
+        },
+        {
+            "tag": "custom_intent",
+            "patterns": [
+                "And on weekends?",
+                "I'm really frustrated",
+                "Quantum refund AI policy",
+                "What is quantum refund AI policy?",
+                "And on weekends?",
+                "I'm really frustrated",
+                "Quantum refund AI policy",
+                "What is quantum refund AI policy?",
+                "And on weekends?",
+                "I'm really frustrated",
+                "Quantum refund AI policy",
+                "What is quantum refund AI policy?",
+                "And on weekends?",
+                "I'm really frustrated",
+                "Quantum refund AI policy",
+                "What is quantum refund AI policy?"
+            ],
+            "responses": [
+                "We are closed on weekends.",
+                "I'm sorry you're feeling that way",
+                "Our refund policy allows returns within 30 days.",
+                "Our refund policy allows returns within 30 days.",
+                "We are closed on weekends.",
+                "I'm sorry you're feeling that way",
+                "Our refund policy allows returns within 30 days.",
+                "Our refund policy allows returns within 30 days.",
+                "We are closed on weekends.",
+                "I'm sorry you're feeling that way",
+                "Our refund policy allows returns within 30 days.",
+                "Our refund policy allows returns within 30 days.",
+                "We are closed on weekends.",
+                "I'm sorry you're feeling that way",
+                "Our refund policy allows returns within 30 days.",
+                "Our refund policy allows returns within 30 days."
+            ]
+        }
+    ]
 }

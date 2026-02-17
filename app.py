@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, session
+from flask import Flask, render_template, request, jsonify, redirect, session,url_for
 import tensorflow as tf
 import numpy as np
 import json
@@ -27,6 +27,11 @@ app.secret_key = "supersecretkey"
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+login_manager.session_protection = "strong"
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    return redirect(url_for("login"))
 
 class User(UserMixin):
     def __init__(self, id):
@@ -34,8 +39,15 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User(user_id)
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("SELECT id FROM users WHERE id=?", (user_id,))
+    user = c.fetchone()
+    conn.close()
 
+    if user:
+        return User(user[0])
+    return None
 # ==============================
 # Initialize Database
 # ==============================
@@ -44,12 +56,12 @@ def init_db():
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS chats
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_message TEXT,
-                  bot_response TEXT,
-                  emotion TEXT,
-                  confidence REAL,
-                  timestamp TEXT)''')
+             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_message TEXT,
+              bot_response TEXT,
+              emotion TEXT,
+              confidence REAL,
+              timestamp TEXT)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,11 +79,9 @@ def init_db():
     conn.close()
 
 init_db()
-def retrain_model():
-    subprocess.run(["python", "train.py"])
 
 # ==============================
-# Create Default Admin
+# Admin Creation
 # ==============================
 def create_admin():
     conn = sqlite3.connect('chatbot.db')
@@ -91,7 +101,7 @@ create_admin()
 # ==============================
 # Load AI Model
 # ==============================
-model = tf.keras.models.load_model("model/model.h5")
+model = tf.keras.models.load_model("model/model.keras")
 tokenizer = pickle.load(open('model/tokenizer.pkl', 'rb'))
 label_encoder = pickle.load(open('model/label_encoder.pkl', 'rb'))
 
@@ -106,12 +116,17 @@ max_len = 20
 def predict_class(sentence):
     sequence = tokenizer.texts_to_sequences([sentence])
     padded = pad_sequences(sequence, maxlen=max_len)
-    result = model.predict(padded, verbose=0)[0]
+    result = model.predict(padded)[0]
 
     confidence = float(np.max(result))
-    intent = label_encoder.inverse_transform([np.argmax(result)])[0]
+    predicted_index = np.argmax(result)
 
+    if confidence < 0.65:   # Increase threshold
+        return None, confidence
+
+    intent = label_encoder.inverse_transform([predicted_index])[0]
     return intent, confidence
+
 
 # ==============================
 # Emotion Detection
@@ -125,13 +140,17 @@ def detect_emotion(text):
     return "neutral"
 
 # ==============================
-# Get Intent Response
+# Get Response
 # ==============================
 def get_response(tag):
     for intent in intents["intents"]:
         if intent["tag"] == tag:
             return random.choice(intent["responses"])
     return "Sorry, I didn't understand that."
+
+# ==============================
+# Clustering Unknown Queries
+# ==============================
 def cluster_unknown_queries():
     conn = sqlite3.connect('chatbot.db')
     c = conn.cursor()
@@ -140,7 +159,7 @@ def cluster_unknown_queries():
     conn.close()
 
     if len(data) < 2:
-        return []
+        return {}
 
     ids = [row[0] for row in data]
     texts = [row[1] for row in data]
@@ -157,6 +176,50 @@ def cluster_unknown_queries():
 
     return clusters
 
+# ==============================
+# Integrate New Knowledge
+# ==============================
+def integrate_new_knowledge():
+    conn = sqlite3.connect('chatbot.db')
+    c = conn.cursor()
+    c.execute("SELECT user_message, admin_response FROM unknown_queries WHERE resolved=1")
+    data = c.fetchall()
+    conn.close()
+
+    if not data:
+        return
+
+    with open("intents.json", "r") as file:
+        intents_data = json.load(file)
+
+    for question, response in data:
+        tag = "custom_intent"
+        found = False
+
+        for intent in intents_data["intents"]:
+            if intent["tag"] == tag:
+                intent["patterns"].append(question)
+                intent["responses"].append(response)
+                found = True
+                break
+
+        if not found:
+            intents_data["intents"].append({
+                "tag": tag,
+                "patterns": [question],
+                "responses": [response]
+            })
+
+    with open("intents.json", "w") as file:
+        json.dump(intents_data, file, indent=4)
+
+# ==============================
+# Retrain Model
+# ==============================
+import sys
+
+def retrain_model():
+    subprocess.run([sys.executable, "train.py"])
 # ==============================
 # Routes
 # ==============================
@@ -181,42 +244,7 @@ def login():
             return redirect("/admin")
 
     return render_template("login.html")
-@app.route("/retrain", methods=["POST"])
-@login_required
-def retrain():
-    retrain_model()
-    return redirect("/admin")
-def integrate_new_knowledge():
-    conn = sqlite3.connect('chatbot.db')
-    c = conn.cursor()
-    c.execute("SELECT assigned_tag, user_message, response FROM unknown_queries WHERE resolved=1")
-    data = c.fetchall()
-    conn.close()
 
-    if not data:
-        return
-
-    with open("intents.json", "r") as file:
-        intents_data = json.load(file)
-
-    for tag, question, response in data:
-        found = False
-        for intent in intents_data["intents"]:
-            if intent["tag"] == tag:
-                intent["patterns"].append(question)
-                intent["responses"].append(response)
-                found = True
-                break
-
-        if not found:
-            intents_data["intents"].append({
-                "tag": tag,
-                "patterns": [question],
-                "responses": [response]
-            })
-
-    with open("intents.json", "w") as file:
-        json.dump(intents_data, file, indent=4)
 @app.route("/retrain", methods=["POST"])
 @login_required
 def retrain():
@@ -246,14 +274,14 @@ def admin():
     unresolved = c.fetchall()
 
     conn.close()
+
     clusters = cluster_unknown_queries()
 
     return render_template("admin.html",
-                        total_messages=total_messages,
-                        recent_chats=recent_chats,
-                        unresolved=unresolved,
-                        clusters=clusters)
-
+                           total_messages=total_messages,
+                           recent_chats=recent_chats,
+                           unresolved=unresolved,
+                           clusters=clusters)
 
 @app.route("/resolve/<int:id>", methods=["POST"])
 @login_required
@@ -271,52 +299,61 @@ def resolve_query(id):
 
 @app.route("/get", methods=["POST"])
 def chatbot_response():
-    msg = request.json["message"]
+    msg = request.json["message"].strip()
 
-    # 1️⃣ Check if admin resolved it
+    # Normalize message
+    normalized_msg = msg.lower()
+
     conn = sqlite3.connect('chatbot.db')
     c = conn.cursor()
-    c.execute("SELECT admin_response FROM unknown_queries WHERE user_message=? AND resolved=1", (msg,))
+
+    # Check resolved custom answer (case-insensitive)
+    c.execute("SELECT admin_response FROM unknown_queries WHERE LOWER(user_message)=? AND resolved=1", 
+              (normalized_msg,))
     custom = c.fetchone()
-    conn.close()
 
     if custom:
-        return jsonify({"response": custom[0]})
+        response = custom[0]
+        emotion = detect_emotion(msg)
+        confidence = 1.0
 
-    # 2️⃣ Emotion
-    emotion = detect_emotion(msg)
-
-    # 3️⃣ Intent Prediction
-    intent, confidence = predict_class(msg)
-
-    # 4️⃣ Low confidence handling
-    if confidence < 0.6:
-        response = "I'm still learning. An admin will review this question."
-
-        conn = sqlite3.connect('chatbot.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO unknown_queries (user_message, timestamp) VALUES (?, ?)",
-                  (msg, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-        conn.close()
     else:
-        response = get_response(intent)
+        emotion = detect_emotion(msg)
+        intent, confidence = predict_class(msg)
 
-    # 5️⃣ Emotion-based tone
+        if intent is None or confidence < 0.75:
+            response = "I'm still learning. An admin will review this question."
+
+            # Prevent duplicate insert
+            c.execute("SELECT id FROM unknown_queries WHERE LOWER(user_message)=?", 
+                      (normalized_msg,))
+            exists = c.fetchone()
+
+            if not exists:
+                c.execute(
+                    "INSERT INTO unknown_queries (user_message, timestamp) VALUES (?, ?)",
+                    (msg, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                )
+        else:
+            response = get_response(intent)
+
+    # Emotion-based tone
     if emotion == "negative":
         response = "I'm sorry you're feeling that way. " + response
     elif emotion == "positive":
         response = "That's great! " + response
 
-    # 6️⃣ Save chat log
-    conn = sqlite3.connect('chatbot.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO chats (user_message, bot_response, emotion, confidence, timestamp) VALUES (?, ?, ?, ?, ?)",
-              (msg, response, emotion, confidence, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    # Save chat log
+    c.execute(
+        "INSERT INTO chats (user_message, bot_response, emotion, confidence, timestamp) VALUES (?, ?, ?, ?, ?)",
+        (msg, response, emotion, confidence, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
+
     conn.commit()
     conn.close()
 
     return jsonify({"response": response})
+
 
 # ==============================
 # Run Server
